@@ -1,5 +1,6 @@
 import os, sys
 import json
+import urllib
 import discord
 import datetime
 import threading
@@ -8,55 +9,47 @@ from discord.ext import commands, tasks
 
 with open('data/key.k', 'r') as f:
     TokenData = json.load(f)
-
 BotToken = TokenData['COVID-19']
 
 Bot_Version = 'Beta 0.0.1'
 print('Starting up...')
-defaultPrefixes = '>'
-defaultLang = 'en' # Support en and kr
-notification = True
 
-if os.path.exists('data/data.data') is False:
-    with open('data/data.data', 'w') as f:
+if os.path.exists('data/ServerData.json') is False:
+    with open('data/ServerData.json', 'w') as f:
         f.write('{}')
 
 def ifDM(ctx): # Check if it is DM.
-    return ctx.guild == None
+    if (ctx.guild == None):
+        return 'DM'
+    else:
+        return 'Server'
 
-def getPrefix(client, message): # Return the prefix for the server.
-    if ifDM(message):
-        return defaultPrefixes
+def getDefault(dataType):
+    return {
+        'prefix':'>',
+        'language':'en',
+        'notification':True
+    }.get(dataType, False)
 
-    with open('data/prefixes.data', 'r') as f:
-        prefixes = json.load(f)
+def getData(client, message, dataType='prefix'):
+    # dataType: prefix, language, notification
+    defaultValue = getDefault(dataType)
+    chatType = ifDM(message)
 
-    try:
-        prefix = prefixes[str(message.guild.id)]
-    except: # If the server is never registered, set the prefixes for the server.
-        prefix = defaultPrefixes # Default prefixes
-        prefixes[str(message.guild.id)] = prefix
-        with open('data/prefixes.data', 'w') as f:
-            json.dump(prefixes, f, indent = 4)
-    return prefix
-
-def getLang(client, message): # Return the language for the server.
-    if ifDM(message):
-        return defaultLang
-
-    with open('data/lang.data', 'r') as f:
-        lang = json.load(f)
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
 
     try:
-        lang = languages[str(message.guild.id)]
-    except: # If the server is never registered, set the language for the server.
-        lang = defaultLang # Default language
-        languages[str(message.guild.id)] = lang
-        with open('data/lang.data', 'w') as f:
-            json.dump(languages, f, indent = 4)
-    return lang
+        data = serverData[chatType][str(message.guild.id)][dataType]
+    except: # If the server is never registered, set the default data for the server.
+        data = defaultValue # Default data
+        serverData[chatType][str(message.guild.id)][dataType] = data
+        with open('data/ServerData.json', 'w') as f:
+            json.dump(serverData, f, indent = 4)
+    return data
 
-client = commands.Bot(command_prefix = getPrefix, case_insensitive = True) # Ignore the upper/lower case
+client = commands.Bot(command_prefix = getData, case_insensitive = True) # Ignore the upper/lower case
+status = cycle(['\'>도움\' 명령어로 도움말을 받으실 수 있습니다.', 'Say >help'])
 
 @client.event
 async def on_ready():
@@ -70,7 +63,7 @@ async def on_ready():
 
 @tasks.loop(seconds = 15)
 async def change_status(): # Change the Bot's status message for every 15 seconds.
-    status = cycle(['\'>도움\' 명령어로 도움말을 받으실 수 있습니다.', 'Say >help']) # Status message array
+    global status # Status message array
     activity = discord.Activity(name = next(status), type = discord.ActivityType.watching)
     await client.change_presence(activity = activity)
 
@@ -78,7 +71,7 @@ async def change_status(): # Change the Bot's status message for every 15 second
 async def on_message(message): # On Message Event: this will be executed every single time when someone sends the message.
     if message.author.bot: # Ignore the self's message.
         return None
-    elif message.content.startswith(getPrefix(client, message)):
+    elif message.content.startswith(getData()):
         log(message)
     await client.process_commands(message)
 
@@ -87,93 +80,101 @@ def log(message):
 
 @client.event
 async def on_guild_join(guild): # Register the new server prefix and language.
-    with open('data/prefixes.data', 'r') as f:
-        prefixes = json.load(f)
-    prefixes[str(guild.id)] = defaultPrefixes
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
+    serverData['Server'][str(guild.id)]['prefix'] = getDefault('prefix')
+    serverData['Server'][str(guild.id)]['language'] = getDefault('language')
+    serverData['Server'][str(guild.id)]['notification'] = getDefault('notification')
     
-    with open('data/prefixes.data', 'w') as f:
-        json.dump(prefixes, f, indent = 4)
-
-
-    with open('data/lang.data', 'r') as f:
-        languages = json.load(f)
-    languages[str(guild.id)] = defaultLang
-    
-    with open('data/lang.data', 'w') as f:
-        json.dump(languages, f, indent = 4)
+    with open('data/ServerData.json', 'w') as f:
+        json.dump(serverData, f, indent = 4)
 
 @client.event
 async def on_guild_remove(guild): # Remove the server prefixes and language.
-    with open('data/prefixes.data', 'r') as f:
-        prefixes = json.load(f)
-    prefixes.pop(str(guild.id))
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
+    serverData['Server'].pop(str(guild.id))
     
-    with open('data/prefixes.data', 'w') as f:
-        json.dump(prefixes, f, indent = 4)
-
-
-    with open('data/lang.data', 'r') as f:
-        languages = json.load(f)
-    languages.pop(str(guild.id))
-    
-    with open('data/lang.data', 'w') as f:
-        json.dump(languages, f, indent = 4)
+    with open('data/ServerData.json', 'w') as f:
+        json.dump(serverData, f, indent = 4)
 
 @client.command()
 @commands.has_permissions(administrator=True, manage_messages=True, manage_roles=True)
 async def setPrefix(ctx, prefix): # Change the prefix.
-    if ifDM(ctx):
-        await ctx.send('You are not able to change the prefix when you\'re messaging via DM. \nUse \'>\' as a prefix.')
-        return None
-
-    with open('data/prefixes.data', 'r') as f:
-        prefixes = json.load(f)
-    prefixes[str(ctx.guild.id)] = prefix
+    chatType = ifDM(ctx)
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
+    serverData[chatType][str(ctx.guild.id)]['prefix'] = prefix
     
-    with open('data/prefixes.data', 'w') as f:
-        json.dump(prefixes, f, indent = 4)
+    with open('data/ServerData.json', 'w') as f:
+        json.dump(serverData, f, indent = 4)
     await ctx.send(f'Server prefix has been successfully changed to {prefix}.')
 
 @client.command()
 @commands.has_permissions(administrator=True, manage_messages=True, manage_roles=True)
-async def setLang(ctx, lang): # Change the prefix.
-    if ifDM(ctx):
-        await ctx.send('You are not able to change the language when you\'re messaging via DM. \nHowever, you still able to use the bot\'s function with a default language, English.')
-        return None
-
-    with open('data/lang.data', 'r') as f:
-        languages = json.load(f)
-    languages[str(ctx.guild.id)] = lang
+async def setLanguage(ctx, language): # Change the prefix.
+    chatType = ifDM(ctx)
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
+    serverData[chatType][str(ctx.guild.id)]['language'] = language
     
-    with open('data/lang.data', 'w') as f:
-        json.dump(languages, f, indent = 4)
-    await ctx.send(f'Server language has been successfully changed to {lang}.')
+    with open('data/ServerData.json', 'w') as f:
+        json.dump(serverData, f, indent = 4)
+    await ctx.send(f'Server language has been successfully changed to {language}.')
 
-predictionJson = ''
-dataJson = ''
+@client.command()
+@commands.has_permissions(administrator=True, manage_messages=True, manage_roles=True)
+async def setNotification(ctx, notification): # Change the prefix.
+    chatType = ifDM(ctx)
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
+    serverData[chatType][str(ctx.guild.id)]['notification'] = notification
+    
+    with open('data/ServerData.json', 'w') as f:
+        json.dump(serverData, f, indent = 4)
+    await ctx.send(f'Server notification setting has been successfully changed to {notification}.')
+
+predictionJson = None
+dataJson = None
 lastUpdated = 'never'
 def getData():
     print('[System] Updating the data...')
-    global predictionJson
     global dataJson
-    URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/prediction.json'
-    urllib.request.urlretrieve(URL, 'data/DailyReports/prediction.json')
+    global lastUpdated
     URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/data.json'
     urllib.request.urlretrieve(URL, 'data/DailyReports/data.json')
-    URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/combined.csv'
-    urllib.request.urlretrieve(URL, 'data/DailyReports/combined.csv')
-    URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/confirmed.csv'
-    urllib.request.urlretrieve(URL, 'data/DailyReports/confirmed.csv')
-    URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/deaths.csv'
-    urllib.request.urlretrieve(URL, 'data/DailyReports/deaths.csv')
-    URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/recovered.csv'
-    urllib.request.urlretrieve(URL, 'data/DailyReports/recovered.csv')
-
-    with open('data/DailyReports/prediction.json', 'r') as f:
-        predictionJson = json.load(f)
     with open('data/DailyReports/data.json', 'r') as f:
         dataJson = json.load(f)
 
+    if (lastUpdated != dataJson['last_updated']):
+        global predictionJson
+        global status
+        URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/prediction.json'
+        urllib.request.urlretrieve(URL, 'data/DailyReports/prediction.json')
+        URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/combined.csv'
+        urllib.request.urlretrieve(URL, 'data/DailyReports/combined.csv')
+        URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/confirmed.csv'
+        urllib.request.urlretrieve(URL, 'data/DailyReports/confirmed.csv')
+        URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/deaths.csv'
+        urllib.request.urlretrieve(URL, 'data/DailyReports/deaths.csv')
+        URL = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Actions/master/LastUpdated/Reorganized/recovered.csv'
+        urllib.request.urlretrieve(URL, 'data/DailyReports/recovered.csv')
+
+        with open('data/DailyReports/prediction.json', 'r') as f:
+            predictionJson = json.load(f)
+
+        a = f"Confirmed: {dataJson['total_confirmed']}"
+        b = f"Deaths: {dataJson['total_deaths']}"
+        c = f"Recovered: {dataJson['total_recovered']}"
+        d = f"Mortality %: {round(dataJson['mortality_rate'] * 100, 2)}"
+        e = f"Recovery %: {round(dataJson['recovery_rate'] * 100, 2)}"
+        status = cycle(['\'>도움\' 명령어로 도움말을 받으실 수 있습니다.', 'Say >help', a, b, c, d, e])
+
+        if (lastUpdated != 'never'):
+            # Send out data update notification to all server.
+            print('Data update notification were sented.')
+
+        lastUpdated = dataJson['last_updated']
     print('[System] Update finished.')
 
 def autoUpdate():
@@ -185,12 +186,13 @@ def autoUpdate():
 
 @client.command()
 async def covid(ctx):
-    Confirmed = 1
-    Deaths = 1
-    Recovered = 1
-    targetTime = 'test'
+    global dataJson
+    Confirmed = dataJson['total_confirmed']
+    Deaths = dataJson['total_deaths']
+    Recovered = dataJson['total_recovered']
+    targetTime = dataJson['last_updated']
     Embed = discord.Embed(
-        title = f'Global Cases ({targetTime} UTC)',
+        title = f'Global Cases ({targetTime})',
         colour = discord.Colour.red()
     )
     Embed.set_author(name = f'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
