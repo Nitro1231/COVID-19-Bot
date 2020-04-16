@@ -16,13 +16,13 @@ print('Starting up...')
 
 if os.path.exists('data/ServerData.json') is False:
     with open('data/ServerData.json', 'w') as f:
-        f.write('{}')
+        f.write('{"DM":{}, "Server":{}}')
 
-def ifDM(ctx): # Check if it is DM.
+def getChatInfo(ctx): # Check if it is DM.
     if (ctx.guild == None):
-        return 'DM'
+        return 'DM', str(ctx.author.id)
     else:
-        return 'Server'
+        return 'Server', str(ctx.guild.id)
 
 def getDefault(dataType):
     return {
@@ -31,21 +31,27 @@ def getDefault(dataType):
         'notification':True
     }.get(dataType, False)
 
+def setData(jsonData, chatType, chatID, dataType, defaultValue):
+    newData = {}
+    data = defaultValue
+    newData[dataType] = data
+    jsonData[chatType][chatID] = newData
+    with open('data/ServerData.json', 'w') as f:
+        json.dump(jsonData, f, indent = 4)
+    return defaultValue
+
 def getData(client, message, dataType='prefix'):
     # dataType: prefix, language, notification
     defaultValue = getDefault(dataType)
-    chatType = ifDM(message)
+    chatType, chatID = getChatInfo(message)
 
     with open('data/ServerData.json', 'r') as f:
         serverData = json.load(f)
 
     try:
-        data = serverData[chatType][str(message.guild.id)][dataType]
+        data = serverData[chatType][chatID][dataType]
     except: # If the server is never registered, set the default data for the server.
-        data = defaultValue # Default data
-        serverData[chatType][str(message.guild.id)][dataType] = data
-        with open('data/ServerData.json', 'w') as f:
-            json.dump(serverData, f, indent = 4)
+        data = setData(serverData, chatType, chatID, dataType, defaultValue)
     return data
 
 client = commands.Bot(command_prefix = getData, case_insensitive = True) # Ignore the upper/lower case
@@ -71,7 +77,7 @@ async def change_status(): # Change the Bot's status message for every 15 second
 async def on_message(message): # On Message Event: this will be executed every single time when someone sends the message.
     if message.author.bot: # Ignore the self's message.
         return None
-    elif message.content.startswith(getData()):
+    elif message.content.startswith(getData(client, message)):
         log(message)
     await client.process_commands(message)
 
@@ -82,12 +88,9 @@ def log(message):
 async def on_guild_join(guild): # Register the new server prefix and language.
     with open('data/ServerData.json', 'r') as f:
         serverData = json.load(f)
-    serverData['Server'][str(guild.id)]['prefix'] = getDefault('prefix')
-    serverData['Server'][str(guild.id)]['language'] = getDefault('language')
-    serverData['Server'][str(guild.id)]['notification'] = getDefault('notification')
-    
-    with open('data/ServerData.json', 'w') as f:
-        json.dump(serverData, f, indent = 4)
+    setData(serverData, 'Server', str(guild.id), 'prefix', getDefault('prefix'))
+    setData(serverData, 'Server', str(guild.id), 'language', getDefault('language'))
+    setData(serverData, 'Server', str(guild.id), 'notification', getDefault('notification'))
 
 @client.event
 async def on_guild_remove(guild): # Remove the server prefixes and language.
@@ -98,46 +101,40 @@ async def on_guild_remove(guild): # Remove the server prefixes and language.
     with open('data/ServerData.json', 'w') as f:
         json.dump(serverData, f, indent = 4)
 
+def checkPermissions(ctx, chatType):
+    if chatType == 'DM':
+        return True
+    pm = ctx.message.author.server_permissions
+    if pm.manage_messages == True or pm.administrator == True or pm.manage_roles == True:
+        return True
+    return False
+
+def changeServerSetting(ctx, dataType, data, description):
+    chatType, chatID = getChatInfo(ctx)
+    if checkPermissions(ctx, chatType):
+        with open('data/ServerData.json', 'r') as f:
+            serverData = json.load(f)
+        setData(serverData, chatType, chatID, dataType, data)
+        return ctx.send(f'Server {description} has been successfully changed to {data}.')
+    else:
+        return ctx.send(f'You do not have permission to change the server {description}.')
+
 @client.command()
-@commands.has_permissions(administrator=True, manage_messages=True, manage_roles=True)
 async def setPrefix(ctx, prefix): # Change the prefix.
-    chatType = ifDM(ctx)
-    with open('data/ServerData.json', 'r') as f:
-        serverData = json.load(f)
-    serverData[chatType][str(ctx.guild.id)]['prefix'] = prefix
-    
-    with open('data/ServerData.json', 'w') as f:
-        json.dump(serverData, f, indent = 4)
-    await ctx.send(f'Server prefix has been successfully changed to {prefix}.')
+    await changeServerSetting(ctx, 'prefix', prefix, 'prefix')
 
 @client.command()
-@commands.has_permissions(administrator=True, manage_messages=True, manage_roles=True)
 async def setLanguage(ctx, language): # Change the prefix.
-    chatType = ifDM(ctx)
-    with open('data/ServerData.json', 'r') as f:
-        serverData = json.load(f)
-    serverData[chatType][str(ctx.guild.id)]['language'] = language
-    
-    with open('data/ServerData.json', 'w') as f:
-        json.dump(serverData, f, indent = 4)
-    await ctx.send(f'Server language has been successfully changed to {language}.')
+    await changeServerSetting(ctx, 'language', language, 'language')
 
 @client.command()
-@commands.has_permissions(administrator=True, manage_messages=True, manage_roles=True)
 async def setNotification(ctx, notification): # Change the prefix.
-    chatType = ifDM(ctx)
-    with open('data/ServerData.json', 'r') as f:
-        serverData = json.load(f)
-    serverData[chatType][str(ctx.guild.id)]['notification'] = notification
-    
-    with open('data/ServerData.json', 'w') as f:
-        json.dump(serverData, f, indent = 4)
-    await ctx.send(f'Server notification setting has been successfully changed to {notification}.')
+    await changeServerSetting(ctx, 'notification', notification, 'notification setting')
 
 predictionJson = None
 dataJson = None
 lastUpdated = 'never'
-def getData():
+def updateData():
     print('[System] Updating the data...')
     global dataJson
     global lastUpdated
@@ -181,7 +178,7 @@ def autoUpdate():
     timer = threading.Timer(3600, autoUpdate)
     print('[System] Scheduled update starting...')
     print(f'Time: {datetime.datetime.now()}')
-    getData()
+    updateData()
     timer.start()
 
 @client.command()
