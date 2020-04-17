@@ -32,13 +32,29 @@ def getDefault(dataType):
     }.get(dataType, False)
 
 def setData(jsonData, chatType, chatID, dataType, defaultValue):
-    newData = {}
-    data = defaultValue
-    newData[dataType] = data
-    jsonData[chatType][chatID] = newData
+    if (chatID in jsonData[chatType]) == False:
+        jsonData[chatType][chatID] = {}
+
+    jsonData[chatType][chatID][dataType] = {}
+    jsonData[chatType][chatID][dataType] = defaultValue
     with open('data/ServerData.json', 'w') as f:
         json.dump(jsonData, f, indent = 4)
     return defaultValue
+
+def setMissingData(jsonData, chatType, chatID):
+    if (chatID in jsonData[chatType]) == False:
+        setData(jsonData, chatType, chatID, 'prefix', getDefault('prefix'))
+        setData(jsonData, chatType, chatID, 'language', getDefault('language'))
+        setData(jsonData, chatType, chatID, 'notification', getDefault('notification'))
+    else:
+        dataType = ['prefix', 'language', 'notification']
+        for data in dataType:
+            if (data in jsonData[chatType][chatID]) == False:
+                setData(jsonData, chatType, chatID, data, getDefault(data))
+
+    with open('data/ServerData.json', 'r') as f:
+        serverData = json.load(f)
+    return serverData
 
 def getData(client, message, dataType='prefix'):
     # dataType: prefix, language, notification
@@ -48,10 +64,13 @@ def getData(client, message, dataType='prefix'):
     with open('data/ServerData.json', 'r') as f:
         serverData = json.load(f)
 
+    serverData = setMissingData(serverData, chatType, chatID)
+
     try:
         data = serverData[chatType][chatID][dataType]
     except: # If the server is never registered, set the default data for the server.
-        data = setData(serverData, chatType, chatID, dataType, defaultValue)
+        data = setData(serverData, chatType, chatID, dataType, getDefault(dataType))
+        print('[Error] get data error, this should be happend anyway...')
     return data
 
 client = commands.Bot(command_prefix = getData, case_insensitive = True) # Ignore the upper/lower case
@@ -104,8 +123,8 @@ async def on_guild_remove(guild): # Remove the server prefixes and language.
 def checkPermissions(ctx, chatType):
     if chatType == 'DM':
         return True
-    pm = ctx.message.author.server_permissions
-    if pm.manage_messages == True or pm.administrator == True or pm.manage_roles == True:
+    pm = ctx.message.author.guild_permissions
+    if (pm.manage_messages == True) or (pm.administrator == True) or (pm.manage_roles == True):
         return True
     return False
 
