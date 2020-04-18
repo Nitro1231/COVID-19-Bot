@@ -1,6 +1,7 @@
 import os, sys
 import json
 import urllib
+import asyncio
 import discord
 import datetime
 import threading
@@ -14,6 +15,7 @@ BotToken = TokenData['COVID-19']
 Bot_Version = 'Beta 0.0.1'
 print('Starting up...')
 
+# region Server Properties
 if os.path.exists('data/ServerData.json') is False:
     with open('data/ServerData.json', 'w') as f:
         f.write('{"DM":{}, "Server":{}}')
@@ -73,7 +75,11 @@ def getData(client, message, dataType='prefix'):
         print('[Error] get data error, this should be happend anyway...')
     return data
 
+# endregion
+
+# region Main Function
 client = commands.Bot(command_prefix = getData, case_insensitive = True) # Ignore the upper/lower case
+client.remove_command('help')
 status = cycle(['\'>도움\' 명령어로 도움말을 받으실 수 있습니다.', 'Say >help'])
 
 @client.event
@@ -103,6 +109,80 @@ async def on_message(message): # On Message Event: this will be executed every s
 def log(message):
     print(f'[{message.author.name}:{message.author.id}] {message.content}')
 
+@client.command(pass_context=True)
+async def help(ctx):
+    cType, __ = getChatInfo(ctx)
+    channel = await ctx.message.author.create_dm()
+    Embed = discord.Embed(
+        title = 'Help',
+        description = 'Shows the list of commands that you can use with descriptions.',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = '**info**', value = 'Provide information about this bot.', inline = False)
+    Embed.add_field(name = '**covid**', value = '_You also can use ``c``_\nProvide live data dashboard of COVID-19.', inline = False)
+    Embed.add_field(name = '**top-10**', value = '_You also can use ``t10``_\nShows you a graph of Top-10 countries with most confirmed cases.', inline = False)
+    Embed.add_field(name = '**coronavirus**', value = '_You also can use ``cv``_\nProvide information about COVID-19 with some useful tips.', inline = False)
+    Embed.add_field(name = '**coronaLive**', value = '_You also can use ``cl``_\nCheck out our live-dashboard, CoronaLive!', inline = False)
+    Embed.add_field(name = '**shortcut**', value = '_You also can use ``sc``_\nEasy way to call other commands with an emoji reaction.', inline = False)
+    Embed.set_footer(text = 'NitroStudio')
+    if cType == 'Server':
+        await channel.send(embed=Embed)
+        await ctx.send(':incoming_envelope: Yo! I just sent what I can do for you via DM message. Check that out! :v:')
+    else:
+        await ctx.send(embed=Embed)
+
+@client.command()
+async def sc(ctx):
+    cType, __ = getChatInfo(ctx)
+    channel = await ctx.message.author.create_dm()
+    Embed = discord.Embed(
+        title = 'Shortcut',
+        description = 'No more typing, just click it.',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    emoji = ['<:medicine:700748997215649832>', '<:info:700748996939087922>', '<:favicon:699600700446867600>', '<:coronavirus:700748996846551161>', '<:virus:700748997303861341>', '<:content:700748996821647523>']
+
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = emoji[0], value = '**help**', inline = True)
+    Embed.add_field(name = emoji[1], value = '**info**', inline = True)
+    Embed.add_field(name = emoji[2], value = '**covid**', inline = True)
+    Embed.add_field(name = emoji[3], value = '**top-10**', inline = True)
+    Embed.add_field(name = emoji[4], value = '**coronavirus**', inline = True)
+    Embed.add_field(name = emoji[5], value = '**coronaLive**', inline = True)
+    Embed.set_footer(text = 'NitroStudio')
+    msg = await ctx.send(embed=Embed)
+
+    for e in emoji:
+        await msg.add_reaction(e)
+
+    def check(reaction, user):
+        return (user == ctx.author) and (reaction.message.id == msg.id)
+    try:
+        reaction, user = await client.wait_for('reaction_add', timeout=180, check=check)
+    except asyncio.TimeoutError: # this will excute when the time is out.
+        await msg.clear_reactions()
+        return
+    else:
+        await msg.clear_reactions()
+        if reaction == emoji[0]:
+            return await help(ctx)
+        elif reaction == emoji[1]:
+            return await help(ctx)
+        elif reaction == emoji[2]:
+            return await help(ctx)
+        elif reaction == emoji[3]:
+            return await help(ctx)
+        elif reaction == emoji[4]:
+            return await help(ctx)
+        elif reaction == emoji[5]:
+            return await help(ctx)
+
+# endregion
+
+# region Server Properties
 @client.event
 async def on_guild_join(guild): # Register the new server prefix and language.
     with open('data/ServerData.json', 'r') as f:
@@ -150,6 +230,9 @@ async def setLanguage(ctx, language): # Change the prefix.
 async def setNotification(ctx, notification): # Change the prefix.
     await changeServerSetting(ctx, 'notification', notification, 'notification setting')
 
+# endregion
+
+# region Covid-19
 predictionJson = None
 dataJson = None
 lastUpdated = 'never'
@@ -182,8 +265,8 @@ def updateData():
         a = f"Confirmed: {dataJson['total_confirmed']}"
         b = f"Deaths: {dataJson['total_deaths']}"
         c = f"Recovered: {dataJson['total_recovered']}"
-        d = f"Mortality %: {round(dataJson['mortality_rate'] * 100, 2)}"
-        e = f"Recovery %: {round(dataJson['recovery_rate'] * 100, 2)}"
+        d = f"Mortality: {round(dataJson['mortality_rate'] * 100, 2)}%"
+        e = f"Recovery: {round(dataJson['recovery_rate'] * 100, 2)}%"
         status = cycle(['\'>도움\' 명령어로 도움말을 받으실 수 있습니다.', 'Say >help', a, b, c, d, e])
 
         if (lastUpdated != 'never'):
@@ -227,5 +310,7 @@ async def covid(ctx):
 async def top10(ctx):
     await ctx.send(file=discord.File(finalPic))
 
-autoUpdate()
+# endregion
+
+#autoUpdate()
 client.run(BotToken)
