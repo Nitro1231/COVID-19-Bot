@@ -11,6 +11,7 @@ from discord.ext import commands, tasks
 with open('data/key.k', 'r') as f:
     TokenData = json.load(f)
 BotToken = TokenData['COVID-19']
+timeLimit = 30
 
 Bot_Version = 'Beta 0.0.1'
 print('Starting up...')
@@ -81,6 +82,7 @@ def getData(client, message, dataType='prefix'):
 client = commands.Bot(command_prefix = getData, case_insensitive = True) # Ignore the upper/lower case
 client.remove_command('help')
 status = cycle(['\'>도움\' 명령어로 도움말을 받으실 수 있습니다.', 'Say >help'])
+emoji = ['<:medicine:700748997215649832>', '<:info:700748996939087922>', '<:favicon:699600700446867600>', '<:coronavirus:700748996846551161>', '<:analytics:701800964444651635>', '<:virus:700748997303861341>', '<:content:700748996821647523>']
 
 @client.event
 async def on_ready():
@@ -108,77 +110,6 @@ async def on_message(message): # On Message Event: this will be executed every s
 
 def log(message):
     print(f'[{message.author.name}:{message.author.id}] {message.content}')
-
-@client.command(pass_context=True)
-async def help(ctx):
-    cType, __ = getChatInfo(ctx)
-    channel = await ctx.message.author.create_dm()
-    Embed = discord.Embed(
-        title = 'Help',
-        description = 'Shows the list of commands that you can use with descriptions.',
-        timestamp = ctx.message.created_at,
-        colour = discord.Colour.red()
-    )
-    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
-    Embed.add_field(name = '**info**', value = 'Provide information about this bot.', inline = False)
-    Embed.add_field(name = '**covid**', value = '_You also can use ``c``_\nProvide live data dashboard of COVID-19.', inline = False)
-    Embed.add_field(name = '**top-10**', value = '_You also can use ``t10``_\nShows you a graph of Top-10 countries with most confirmed cases.', inline = False)
-    Embed.add_field(name = '**coronavirus**', value = '_You also can use ``cv``_\nProvide information about COVID-19 with some useful tips.', inline = False)
-    Embed.add_field(name = '**coronaLive**', value = '_You also can use ``cl``_\nCheck out our live-dashboard, CoronaLive!', inline = False)
-    Embed.add_field(name = '**shortcut**', value = '_You also can use ``sc``_\nEasy way to call other commands with an emoji reaction.', inline = False)
-    Embed.set_footer(text = 'NitroStudio')
-    if cType == 'Server':
-        await channel.send(embed=Embed)
-        await ctx.send(':incoming_envelope: Yo! I just sent what I can do for you via DM message. Check that out! :v:')
-    else:
-        await ctx.send(embed=Embed)
-
-@client.command()
-async def sc(ctx):
-    cType, __ = getChatInfo(ctx)
-    channel = await ctx.message.author.create_dm()
-    Embed = discord.Embed(
-        title = 'Shortcut',
-        description = 'No more typing, just click it.',
-        timestamp = ctx.message.created_at,
-        colour = discord.Colour.red()
-    )
-    emoji = ['<:medicine:700748997215649832>', '<:info:700748996939087922>', '<:favicon:699600700446867600>', '<:coronavirus:700748996846551161>', '<:virus:700748997303861341>', '<:content:700748996821647523>']
-
-    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
-    Embed.add_field(name = emoji[0], value = '**help**', inline = True)
-    Embed.add_field(name = emoji[1], value = '**info**', inline = True)
-    Embed.add_field(name = emoji[2], value = '**covid**', inline = True)
-    Embed.add_field(name = emoji[3], value = '**top-10**', inline = True)
-    Embed.add_field(name = emoji[4], value = '**coronavirus**', inline = True)
-    Embed.add_field(name = emoji[5], value = '**coronaLive**', inline = True)
-    Embed.set_footer(text = 'NitroStudio')
-    msg = await ctx.send(embed=Embed)
-
-    for e in emoji:
-        await msg.add_reaction(e)
-
-    def check(reaction, user):
-        return (user == ctx.author) and (reaction.message.id == msg.id)
-    try:
-        reaction, user = await client.wait_for('reaction_add', timeout=180, check=check)
-    except asyncio.TimeoutError: # this will excute when the time is out.
-        await msg.clear_reactions()
-        return
-    else:
-        await msg.clear_reactions()
-        if reaction == emoji[0]:
-            return await help(ctx)
-        elif reaction == emoji[1]:
-            return await help(ctx)
-        elif reaction == emoji[2]:
-            return await help(ctx)
-        elif reaction == emoji[3]:
-            return await help(ctx)
-        elif reaction == emoji[4]:
-            return await help(ctx)
-        elif reaction == emoji[5]:
-            return await help(ctx)
 
 # endregion
 
@@ -220,16 +151,21 @@ def changeServerSetting(ctx, dataType, data, description):
 
 @client.command()
 async def setPrefix(ctx, prefix): # Change the prefix.
-    await changeServerSetting(ctx, 'prefix', prefix, 'prefix')
+    return await changeServerSetting(ctx, 'prefix', prefix, 'prefix')
 
 @client.command()
 async def setLanguage(ctx, language): # Change the prefix.
-    await changeServerSetting(ctx, 'language', language, 'language')
+    if language == 'en' or language == 'kr':
+        return await changeServerSetting(ctx, 'language', language, 'language')
+    else:
+        return await ctx.send('Currently, only `en` (English) available. However, you also can change the language to `kr` (Korean), and it will automatically applied when it became available.')
 
 @client.command()
 async def setNotification(ctx, notification): # Change the prefix.
-    await changeServerSetting(ctx, 'notification', notification, 'notification setting')
-
+    if notification == 'True' or notification == 'False':
+        return await changeServerSetting(ctx, 'notification', notification, 'notification setting')
+    else:
+        return await ctx.send('This command required only `True` or `False` as a perimeter.')
 # endregion
 
 # region Covid-19
@@ -283,9 +219,65 @@ def autoUpdate():
     updateData()
     timer.start()
 
-@client.command()
+# endregion
+
+# region Command
+@client.command(pass_context=True, aliases=['hp','도움','도움말'])
+async def help(ctx):
+    cType, __ = getChatInfo(ctx)
+    channel = await ctx.message.author.create_dm()
+    Embed = discord.Embed(
+        title = 'Help',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = '**help**', value = f'{emoji[0]}_You also can use ``hp``_\nShows the list of commands that you can use.', inline = False)
+    Embed.add_field(name = '**info**', value = f'{emoji[1]}_There is no replacement command..._\nProvide information about this bot.', inline = False)
+    Embed.add_field(name = '**covid**', value = f'{emoji[2]}_You also can use ``c``_\nProvide live data dashboard of COVID-19.', inline = False)
+    Embed.add_field(name = '**top-10**', value = f'{emoji[3]}_You also can use ``t10``_\nProvide a graph of Top-10 countries with most confirmed cases.', inline = False)
+    Embed.add_field(name = '**prediction**', value = f'{emoji[4]}_You also can use ``pd``_\nProvide a prediction graph of COVID-19. Don\'t panic, it is just a prediction.', inline = False)
+    Embed.add_field(name = '**coronavirus**', value = f'{emoji[5]}_You also can use ``cv``_\nProvide information about COVID-19 with some useful tips.', inline = False)
+    Embed.add_field(name = '**coronalive**', value = f'{emoji[6]}_You also can use ``cl``_\nCheck out our live-dashboard website, CoronaLive!', inline = False)
+    Embed.add_field(name = '-' * 20, value = '(ง˙∇˙)ว', inline = False)
+    Embed.add_field(name = '**shortcut**', value = '_You also can use ``sc``_\nEasy way to call other commands with an emoji reaction.', inline = False)
+    Embed.add_field(name = '**admin**', value = '_There is no replacement command..._\nAdmin command for those who own the server or using DM.', inline = False)
+    Embed.add_field(name = '-' * 20, value = 'Extra Information', inline = False)
+    Embed.add_field(name = '**Time out**', value = f'Every emoji reaction has {timeLimit} seconds time limit.\nAfter {timeLimit} seconds, your reaction will be ignored.', inline = False)
+    Embed.set_footer(text = 'NitroStudio')
+    if cType == 'Server':
+        await channel.send(embed=Embed)
+        await ctx.send(':incoming_envelope: Yo! I just sent what I can do for you via DM message. Check that out! :v:')
+    else:
+        await ctx.send(embed=Embed)
+
+@client.command(aliases=['정보']) # need update
+async def info(ctx):
+    global emoji
+    cType, __ = getChatInfo(ctx)
+    channel = await ctx.message.author.create_dm()
+    Embed = discord.Embed(
+        title = 'COVID-19 Discord Bot',
+        description = 'Provided by NitroStudio.',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = emoji[0], value = '**help**', inline = True)
+    Embed.add_field(name = emoji[1], value = '**info**', inline = True)
+    Embed.add_field(name = emoji[2], value = '**covid**', inline = True)
+    Embed.add_field(name = emoji[3], value = '**top-10**', inline = True)
+    Embed.add_field(name = emoji[4], value = '**prediction**', inline = True)
+    Embed.add_field(name = emoji[5], value = '**coronavirus**', inline = True)
+    Embed.add_field(name = emoji[6], value = '**coronaLive**', inline = True)
+    Embed.set_footer(text = 'NitroStudio')
+    return await ctx.send(embed=Embed)
+
+@client.command(aliases=['c'])
 async def covid(ctx):
     global dataJson
+    cType, __ = getChatInfo(ctx)
+    emoji = ['<:linear:701313021607280670>', '<:logistics:701313021401890908>']
     Confirmed = dataJson['total_confirmed']
     Deaths = dataJson['total_deaths']
     Recovered = dataJson['total_recovered']
@@ -295,7 +287,6 @@ async def covid(ctx):
         colour = discord.Colour.red()
     )
     Embed.set_author(name = f'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
-    #Embed.set_thumbnail(url = User_Json['profile_image_url'])
     Embed.add_field(name = '<:Confirmed:699600701134733333> Confirmed', value = f'**{Confirmed}**', inline = True)
     Embed.add_field(name = '<:Deaths:699600701017292860> Deaths', value = f'**{Deaths}**', inline = True)
     Embed.add_field(name = '<:Recovered:699600700753051668> Recovered', value = f'**{Recovered}**', inline = True)
@@ -304,13 +295,181 @@ async def covid(ctx):
     Embed.add_field(name = '<:Recovery_Rate:699600700707176468> Recovery Rate', value = f'**{round(Recovered / Confirmed * 100, 2)}%**', inline = True)
     Embed.set_image(url='https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/COVID-19_Outbreak_World_Map_per_Capita.svg/800px-COVID-19_Outbreak_World_Map_per_Capita.svg.png')
     Embed.set_footer(text = f'Data from Johns Hopkins, Last Update at {targetTime}', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png')
+    msg = await ctx.send(embed = Embed)
+
+    for e in emoji:
+        await msg.add_reaction(e)
+
+    def check(reaction, user):
+        return (user == ctx.author) and (reaction.message.id == msg.id)
+    try:
+        reaction, user = await client.wait_for('reaction_add', timeout=timeLimit, check=check)
+        reaction = str(reaction)
+    except asyncio.TimeoutError: # this will excute when the time is out.
+        if cType != 'DM':
+            await msg.clear_reactions()
+    else:
+        if reaction == emoji[0]:
+            gEmbed = discord.Embed(
+                title = f'Global Cases Linear Graph ({targetTime})',
+                colour = discord.Colour.red()
+            )
+            gEmbed.set_author(name = f'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+            gEmbed.set_image(url= f'https://github.com/Nitro1231/COVID-19-Actions/blob/master/DailyReports/{dataJson["date"]}/Img/global_linear_t.png?raw=true')
+            gEmbed.set_footer(text = f'Data from Johns Hopkins, Last Update at {targetTime}', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png')
+            await ctx.send(embed = gEmbed)
+        elif reaction == emoji[1]:
+            gEmbed = discord.Embed(
+                title = f'Global Cases Logistic Graph ({targetTime})',
+                colour = discord.Colour.red()
+            )
+            gEmbed.set_author(name = f'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+            gEmbed.set_image(url= f'https://github.com/Nitro1231/COVID-19-Actions/blob/master/DailyReports/{dataJson["date"]}/Img/global_log_t.png?raw=true')
+            gEmbed.set_footer(text = f'Data from Johns Hopkins, Last Update at {targetTime}', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png')
+            await ctx.send(embed = gEmbed)
+    if cType != 'DM':
+        await msg.clear_reactions()
+
+@client.command(aliases=['t10', '탑'])
+async def top10(ctx):
+    global dataJson
+    Confirmed = dataJson['total_confirmed']
+    Deaths = dataJson['total_deaths']
+    Recovered = dataJson['total_recovered']
+    targetTime = dataJson['last_updated']
+    Embed = discord.Embed(
+        title = f'TOP-10 Cases ({targetTime})',
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = f'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.set_image(url = f'https://github.com/Nitro1231/COVID-19-Actions/blob/master/DailyReports/{dataJson["date"]}/Img/top10_t.png?raw=true')
+    Embed.set_footer(text = f'Data from Johns Hopkins, Last Update at {targetTime}', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png')
+    return await ctx.send(embed = Embed)
+
+@client.command(aliases=['pd', '예측'])
+async def prediction(ctx):
+    global predictionJson
+    global dataJson
+    total_confirmed_prediction = predictionJson['total_confirmed_prediction']
+    total_confirmed_difference = predictionJson['total_confirmed_difference']
+    tomorrow = predictionJson['tomorrow']
+    tomorrow_confirmed_prediction = predictionJson['tomorrow_confirmed_prediction']
+    tomorrow_confirmed_difference = predictionJson['tomorrow_confirmed_difference']
+    total_days = predictionJson['total_days']
+    days_remained = predictionJson['days_remained']
+    final_day_prediction = predictionJson['final_day_prediction']
+    targetTime = predictionJson['last_updated']
+    Embed = discord.Embed(
+        title = f'Global Prediction Cases ({targetTime})',
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = f'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = 'Total predicted cases', value = f'**{total_confirmed_prediction} (+ {total_confirmed_difference})**', inline = False)
+    Embed.add_field(name = f'Predicted Cases for Tomorrow ({tomorrow})', value = f'**{tomorrow_confirmed_prediction} (+ {tomorrow_confirmed_difference})**', inline = False)
+    Embed.add_field(name = 'Total days', value = f'**{total_days}** ({days_remained} days remain)', inline = False)
+    Embed.add_field(name = 'Predicted final day', value = f'**{final_day_prediction}**', inline = False)
+    Embed.add_field(name = '-' * 20, value = f'This is just a prediction. It is up to you to believe this or not.', inline = False)
+    Embed.set_image(url = f'https://github.com/Nitro1231/COVID-19-Actions/blob/master/DailyReports/{dataJson["date"]}/Img/prediction_t.png?raw=true')
+    Embed.set_footer(text = f'Data from Johns Hopkins, Last Update at {targetTime}', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png')
     await ctx.send(embed = Embed)
 
+@client.command(aliases=['cv', '코로나바이러스', '코로나']) # need update
+async def coronavirus(ctx):
+    global emoji
+    cType, __ = getChatInfo(ctx)
+    channel = await ctx.message.author.create_dm()
+    Embed = discord.Embed(
+        title = 'Shortcut',
+        description = 'No more typing, just click it.',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = emoji[0], value = '**help**', inline = True)
+    Embed.add_field(name = emoji[1], value = '**info**', inline = True)
+    Embed.add_field(name = emoji[2], value = '**covid**', inline = True)
+    Embed.add_field(name = emoji[3], value = '**top-10**', inline = True)
+    Embed.add_field(name = emoji[4], value = '**prediction**', inline = True)
+    Embed.add_field(name = emoji[5], value = '**coronavirus**', inline = True)
+    Embed.add_field(name = emoji[6], value = '**coronaLive**', inline = True)
+    Embed.set_footer(text = 'NitroStudio')
+    return await ctx.send(embed=Embed)
+
+@client.command(aliases=['cl', '코로나라이브'])
+async def coronaLive(ctx):
+    Embed = discord.Embed(
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'CoronaLive', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    return await ctx.send(embed=Embed)
+
 @client.command()
-async def top10(ctx):
-    await ctx.send(file=discord.File(finalPic))
+async def admin(ctx):
+    Embed = discord.Embed(
+        title = 'Admin',
+        description = 'Admin command for those who own the server or using DM.',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = '**setprefix `prefix`**', value = 'Change the prefix. You cannot use blank for the prefix.', inline = False)
+    Embed.add_field(name = '**setlanguage `language`**', value = 'Change the language setting. This function is currently unavailable, but you can change the setting now. It will be automatically applied to the server or DM after the function is available.', inline = False)
+    Embed.add_field(name = '**setnotification `notification`**', value = 'Change the notification setting. This command required only `True` or `False` as a perimeter. If you did not add the tag `[covid-notification]` to your text channel, it will send the notification on first index channel.', inline = False)
+    Embed.set_footer(text = 'NitroStudio')
+    return await ctx.send(embed=Embed)
+
+@client.command(aliases=['sc','단축키','단축'])
+async def shortcut(ctx):
+    global emoji
+    cType, __ = getChatInfo(ctx)
+    channel = await ctx.message.author.create_dm()
+    Embed = discord.Embed(
+        title = 'Shortcut',
+        description = 'No more typing, just click it.',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
+    Embed.add_field(name = emoji[0], value = '**help**', inline = True)
+    Embed.add_field(name = emoji[1], value = '**info**', inline = True)
+    Embed.add_field(name = emoji[2], value = '**covid**', inline = True)
+    Embed.add_field(name = emoji[3], value = '**top-10**', inline = True)
+    Embed.add_field(name = emoji[4], value = '**prediction**', inline = True)
+    Embed.add_field(name = emoji[5], value = '**coronavirus**', inline = True)
+    Embed.add_field(name = emoji[6], value = '**coronalive**', inline = True)
+    Embed.set_footer(text = 'NitroStudio')
+    msg = await ctx.send(embed=Embed)
+
+    for e in emoji:
+        await msg.add_reaction(e)
+
+    def check(reaction, user):
+        return (user == ctx.author) and (reaction.message.id == msg.id)
+    try:
+        reaction, user = await client.wait_for('reaction_add', timeout=timeLimit, check=check)
+        reaction = str(reaction)
+    except asyncio.TimeoutError: # this will excute when the time is out.
+        if cType != 'DM':
+            await msg.clear_reactions()
+    else:
+        if reaction == emoji[0]:
+            await help(ctx)
+        elif reaction == emoji[1]:
+            await info(ctx)
+        elif reaction == emoji[2]:
+            await covid(ctx)
+        elif reaction == emoji[3]:
+            await top10(ctx)
+        elif reaction == emoji[4]:
+            await prediction(ctx)
+        elif reaction == emoji[5]:
+            await coronavirus(ctx)
+        elif reaction == emoji[6]:
+            await coronaLive(ctx)
+        if cType != 'DM':
+            await msg.delete()
 
 # endregion
 
-#autoUpdate()
+autoUpdate()
 client.run(BotToken)
