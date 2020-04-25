@@ -8,13 +8,24 @@ import threading
 from itertools import cycle
 from datetime import datetime
 from discord.ext import commands, tasks
+from discord.ext.commands.cooldowns import BucketType
 
 with open('data/key.k', 'r') as f:
     TokenData = json.load(f)
-BotToken = TokenData['COVID-19']
-timeLimit = 30
 
-Bot_Version = 'Beta 0.0.1'
+DevelopmentVer = True
+
+if DevelopmentVer:
+    BotToken = TokenData['Dev']
+else:
+    BotToken = TokenData['COVID-19']
+
+timeLimit = 30
+coolDownTime = 10
+coolDownLimit = 3
+reply = 0
+adminID = TokenData['Admin']
+Bot_Version = 'Beta 0.0.2'
 print('Starting up...')
 startTime = datetime.now()
 
@@ -109,11 +120,29 @@ async def on_message(message): # On Message Event: this will be executed every s
         return None
     elif message.content.startswith(getData(client, message)):
         log(message)
+    global reply
+    reply += 1
     await client.process_commands(message)
 
 def log(message):
     print(f'[{message.author.name}:{message.author.id}] {message.content}')
 
+@client.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send(f'Cannot find command `{ctx.message.content}`.\nIf you don\'t know how to use this bot, try `{getData(client, ctx.message)}help`.')
+    elif isinstance(error, commands.CommandOnCooldown):
+        print(f'[Warning] Cooldown limitation was reached by {ctx.message.author.name}:{ctx.message.author.id} in Guild({ctx.message.guild}).')
+        message = f'To prevent overtraffic of the server, you are not able to use more than {coolDownLimit} commands per {coolDownTime} seconds. Thank you for your understanding.'
+        await ctx.send(message)
+    else:
+        print(f'[Error] An error has occurred while executing the command "{ctx.message.content}".\nError Info: {error}')
+        message = f'An unknown error occurred while executing the command.\nIf this error keep occurred, please contact with developer.\nError information: ```{error}```'
+        await ctx.send(message)
+
+def adminCheck(ctx): # @commands.check(adminCheck)
+    global adminID
+    return (str)(ctx.author.id) == adminID
 # endregion
 
 # region Server Properties
@@ -153,12 +182,14 @@ def changeServerSetting(ctx, dataType, data, description):
         return ctx.send(f'You do not have permission to change the server `{description}`.')
 
 @client.command()
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def setPrefix(ctx, prefix=None): # Change the prefix.
     if prefix == None:
         return await ctx.send('You cannot use blank for the prefix.')
     return await changeServerSetting(ctx, 'prefix', prefix, '`prefix`')
 
 @client.command()
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def setLanguage(ctx, language=None): # Change the prefix.
     if language == 'en' or language == 'kr':
         return await changeServerSetting(ctx, 'language', language, '`language`')
@@ -166,6 +197,7 @@ async def setLanguage(ctx, language=None): # Change the prefix.
         return await ctx.send('Currently, only `en` (English) available. However, you also can change the language to `kr` (Korean), and it will automatically applied when it became available.')
 
 @client.command()
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def setNotification(ctx, notification=None): # Change the prefix.
     if notification == 'True' or notification == 'true':
         return await changeServerSetting(ctx, 'notification', True, '`notification` setting')
@@ -231,6 +263,7 @@ def autoUpdate():
 
 # region Command
 @client.command(pass_context=True, aliases=['hp','도움','도움말'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def help(ctx):
     cType, __ = getChatInfo(ctx)
     channel = await ctx.message.author.create_dm()
@@ -239,17 +272,19 @@ async def help(ctx):
         timestamp = ctx.message.created_at,
         colour = discord.Colour.red()
     )
+    prefix = getData(client, ctx.message)
     Embed.set_author(name = 'Coronavirus (COVID-19) Pandemic', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
-    Embed.add_field(name = '**help**', value = f'{emoji[0]}_You also can use ``hp``_\nShows the list of commands that you can use.', inline = False)
-    Embed.add_field(name = '**covid**', value = f'{emoji[1]}_You also can use ``c``_\nProvide live data dashboard of COVID-19.', inline = False)
-    Embed.add_field(name = '**top10**', value = f'{emoji[2]}_You also can use ``t10``_\nProvide a graph of Top-10 countries with most confirmed cases.', inline = False)
-    Embed.add_field(name = '**prediction**', value = f'{emoji[3]}_You also can use ``pd``_\nProvide a prediction graph of COVID-19. Don\'t panic, it is just a prediction.', inline = False)
-    Embed.add_field(name = '**coronavirus**', value = f'{emoji[4]}_You also can use ``cv``_\nProvide information about COVID-19 with some useful tips.', inline = False)
-    Embed.add_field(name = '**coronalive**', value = f'{emoji[5]}_You also can use ``cl``_\nCheck out our live-dashboard website, CoronaLive!', inline = False)
+    Embed.add_field(name = f'**{prefix}help**', value = f'{emoji[0]}_You also can use ``hp``_\nShows the list of commands that you can use.', inline = False)
+    Embed.add_field(name = f'**{prefix}covid**', value = f'{emoji[1]}_You also can use ``c``_\nProvide live data dashboard of COVID-19.', inline = False)
+    Embed.add_field(name = f'**{prefix}top10**', value = f'{emoji[2]}_You also can use ``t10``_\nProvide a graph of Top-10 countries with most confirmed cases.', inline = False)
+    Embed.add_field(name = f'**{prefix}prediction**', value = f'{emoji[3]}_You also can use ``pd``_\nProvide a prediction graph of COVID-19. Don\'t panic, it is just a prediction.', inline = False)
+    Embed.add_field(name = f'**{prefix}coronavirus**', value = f'{emoji[4]}_You also can use ``cv``_\nProvide information about COVID-19 with some useful tips.', inline = False)
+    Embed.add_field(name = f'**{prefix}coronalive**', value = f'{emoji[5]}_You also can use ``cl``_\nCheck out our live-dashboard website, CoronaLive!', inline = False)
     Embed.add_field(name = '-' * 20, value = '(ง˙∇˙)ว', inline = False)
-    Embed.add_field(name = '**info**', value = f'_There is no replacement command..._\nProvide information about this bot.', inline = False)
-    Embed.add_field(name = '**admin**', value = '_There is no replacement command..._\nAdmin command for those who own the server or using DM.', inline = False)
-    Embed.add_field(name = '**shortcut**', value = '_You also can use ``sc``_\nEasy way to call other commands with an emoji reaction.', inline = False)
+    Embed.add_field(name = f'**{prefix}info**', value = f'_There is no replacement command..._\nProvide information about this bot.', inline = False)
+    Embed.add_field(name = f'**{prefix}admin**', value = '_There is no replacement command..._\nAdmin command for those who own the server or using DM.', inline = False)
+    Embed.add_field(name = f'**{prefix}ping**', value = '_There is no replacement command..._\nPong!', inline = False)
+    Embed.add_field(name = f'**{prefix}shortcut**', value = '_You also can use ``sc``_\nEasy way to call other commands with an emoji reaction.', inline = False)
     Embed.add_field(name = '-' * 20, value = 'Extra Information', inline = False)
     Embed.add_field(name = '**Time out**', value = f'Every emoji reaction has {timeLimit} seconds time limit.\nAfter {timeLimit} seconds, your reaction will be ignored.', inline = False)
     Embed.set_footer(text = 'NitroStudio')
@@ -260,6 +295,7 @@ async def help(ctx):
         await ctx.send(embed=Embed)
 
 @client.command(aliases=['정보'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def info(ctx):
     global startTime
     global botInfo
@@ -281,12 +317,14 @@ async def info(ctx):
     Embed.add_field(name='**Uptime**', value=upTime, inline=False)
     Embed.add_field(name='**Users**', value=users, inline=True)
     Embed.add_field(name='**Server**', value=len(client.guilds), inline=True)
+    Embed.add_field(name='**Responded**', value=reply, inline=False)
     Embed.add_field(name='**Bot Version**', value=Bot_Version, inline=False)
     Embed.add_field(name='**Discord.py Version**', value=discord.__version__, inline=False)
     Embed.set_footer(text = 'NitroStudio')
     await ctx.send(embed=Embed)
 
 @client.command(aliases=['c'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def covid(ctx):
     global dataJson
     cType, __ = getChatInfo(ctx)
@@ -344,6 +382,7 @@ async def covid(ctx):
         await msg.clear_reactions()
 
 @client.command(aliases=['t10', '탑'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def top10(ctx):
     global dataJson
     Confirmed = dataJson['total_confirmed']
@@ -360,6 +399,7 @@ async def top10(ctx):
     return await ctx.send(embed = Embed)
 
 @client.command(aliases=['pd', '예측'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def prediction(ctx):
     global predictionJson
     global dataJson
@@ -387,6 +427,7 @@ async def prediction(ctx):
     await ctx.send(embed = Embed)
 
 @client.command(aliases=['cv', '코로나바이러스', '코로나'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def coronavirus(ctx):
     Embed = discord.Embed(
         title = 'Coronavirus disease (COVID-19)',
@@ -408,12 +449,14 @@ async def coronavirus(ctx):
     return await ctx.send(embed=Embed)
 
 @client.command(aliases=['cl', '코로나라이브'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def coronaLive(ctx):
     Embed = discord.Embed(colour = discord.Colour.red())
     Embed.set_author(name = 'CoronaLive', icon_url = 'https://raw.githubusercontent.com/Nitro1231/COVID-19-Bot/master/COVID-19/img/virus.png', url = 'https://nitro1231.github.io/CoronaLive/')
     return await ctx.send(embed=Embed)
 
 @client.command()
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def admin(ctx):
     Embed = discord.Embed(
         title = 'Admin',
@@ -428,7 +471,19 @@ async def admin(ctx):
     Embed.set_footer(text = 'NitroStudio')
     return await ctx.send(embed=Embed)
 
+@client.command(aliases=['핑'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
+async def ping(ctx):
+    embed = discord.Embed(
+        title='Ping!',
+        description=f'🏓 Pong! (`{round(client.latency * 1000)}ms`)',
+        timestamp = ctx.message.created_at,
+        colour = discord.Colour.red()
+    )
+    await ctx.send(embed=embed)
+
 @client.command(aliases=['sc','단축키','단축'])
+@commands.cooldown(coolDownLimit, coolDownTime, commands.BucketType.user)
 async def shortcut(ctx):
     global emoji
     cType, __ = getChatInfo(ctx)
@@ -474,6 +529,21 @@ async def shortcut(ctx):
             await coronaLive(ctx)
         if cType != 'DM':
             await msg.delete()
+
+# 포럼, 데이터 프라이버시 & 라이센스, 데이터 정보
+
+# Admin Command
+@client.command()
+@commands.check(adminCheck)
+async def update(ctx):
+    updateData()
+    global lastUpdated
+    await ctx.send(f'Update Finished. ({lastUpdated})')
+
+@client.command()
+@commands.check(adminCheck)
+async def exit(ctx):
+    return await client.logout()
 
 # endregion
 
